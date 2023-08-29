@@ -602,6 +602,7 @@ M3D transformLiDARCovToWorld(Eigen::Vector3d &p_lidar, const esekfom::esekf<stat
     M3D il_rot_var = kf.get_P().block<3, 3>(6, 6);
     M3D il_t_var = kf.get_P().block<3, 3>(9, 9);
 
+    // cov: body <--lidar
     M3D COV_body =
             state.offset_R_L_I * COV_lidar * state.offset_R_L_I.conjugate()
             + state.offset_R_L_I * (-point_crossmat) * il_rot_var * (-point_crossmat).transpose() * state.offset_R_L_I.conjugate()
@@ -1009,6 +1010,7 @@ int main(int argc, char** argv)
             /*** iterated state estimation ***/
             double t_update_start = omp_get_wtime();
             double solve_H_time = 0;
+            // todo
             kf.update_iterated_dyn_share_diagonal();
 //            kf.update_iterated_dyn_share_modified(LASER_POINT_COV, solve_H_time);
             double t_update_end = omp_get_wtime();

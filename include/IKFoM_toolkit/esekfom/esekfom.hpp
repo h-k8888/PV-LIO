@@ -1955,12 +1955,12 @@ public:
         Matrix<scalar_type, n, 1> K_h;
         Matrix<scalar_type, n, n> K_x;
 
-        vectorized_state dx_new = vectorized_state::Zero();
+        vectorized_state dx_new = vectorized_state::Zero(); // error-state
         for(int i=-1; i<maximum_iter; i++)
         {
             dyn_share.valid = true;
             double t_update_start = omp_get_wtime();
-            h_dyn_share(x_, dyn_share);
+            h_dyn_share(x_, dyn_share); //计算雅可比
             double t_update_end = omp_get_wtime();
             // std::printf("Measurement Time: %f\n", t_update_end - t_update_start);
 
@@ -1973,14 +1973,14 @@ public:
 #ifdef USE_sparse
             spMt h_x_ = dyn_share.h_x.sparseView();
 #else
-            Eigen::Matrix<scalar_type, Eigen::Dynamic, 12> h_x_ = dyn_share.h_x;
+            Eigen::Matrix<scalar_type, Eigen::Dynamic, 12> h_x_ = dyn_share.h_x; // partial differention matrices, Jacobian
             // 这里直接用R存储R inv
             auto R_inv = dyn_share.R.asDiagonal();
 #endif
             double solve_start = omp_get_wtime();
-            dof_Measurement = h_x_.rows();
-            vectorized_state dx;
-            x_.boxminus(dx, x_propagated);
+            dof_Measurement = h_x_.rows(); //rows of Jacobian
+            vectorized_state dx; //error
+            x_.boxminus(dx, x_propagated); //get error dx
             dx_new = dx;
 
 
@@ -1996,13 +1996,15 @@ public:
                     seg_SO3(i) = dx(idx+i);
                 }
 
-                res_temp_SO3 = MTK::A_matrix(seg_SO3).transpose();
+                res_temp_SO3 = MTK::A_matrix(seg_SO3).transpose(); // A, Eq. (6) in FASTLIO
+                //using equation (16) in FASTLIO, update P_ = J * P_ * J^-1
+                // A * P_(row), update P_ corresponding to the error state
                 dx_new.template block<3, 1>(idx, 0) = res_temp_SO3 * dx_new.template block<3, 1>(idx, 0);
                 for(int i = 0; i < n; i++){
                     P_. template block<3, 1>(idx, i) = res_temp_SO3 * (P_. template block<3, 1>(idx, i));
                 }
                 for(int i = 0; i < n; i++){
-                    P_. template block<1, 3>(i, idx) =(P_. template block<1, 3>(i, idx)) *  res_temp_SO3.transpose();
+                    P_. template block<1, 3>(i, idx) =(P_. template block<1, 3>(i, idx)) *  res_temp_SO3.transpose();	// P_(col) * A^T
                 }
             }
 
@@ -2159,26 +2161,27 @@ public:
 //                K_h = K_ * dyn_share.h;
 
                 // 注意这里h_x_只包含前12维变量的J，为了提高计算速度只需要前12维与Rinv相乘，但是P_需要保留所有的维度
-                Matrix<scalar_type, 12, Eigen::Dynamic> HT_Rinv = h_x_.transpose() * R_inv;
-                cov P_temp = P_.inverse();
-                P_temp.template block<12, 12>(0, 0) += HT_Rinv * h_x_;
+                Matrix<scalar_type, 12, Eigen::Dynamic> HT_Rinv = h_x_.transpose() * R_inv; // H^T * R^-1
+                cov P_temp = P_.inverse(); // P^-1
+                P_temp.template block<12, 12>(0, 0) += HT_Rinv * h_x_; // (H^T * R^-1 * H + P^-1)
                 // P_temp = (HT Rinv H + Pinv) Fast-LIO(Eq.20)
                 // P_temp: n x n, HT_Rinv: 12 x 观测量  K_: n x 观测量
                 // 所以需要取出P_temp.inverse()的前12列(因为按照nxn的naive实现方式，即使不取出前12列，HT_Rinv在12行之后的部分也是0，不影响求K_的值)
-                Matrix<scalar_type, n, Eigen::Dynamic> K_ = (P_temp.inverse()).template block<n, 12>(0, 0) * HT_Rinv;
+                Matrix<scalar_type, n, Eigen::Dynamic> K_ = (P_temp.inverse()).template block<n, 12>(0, 0) * HT_Rinv; // K = (H^T * R^-1 * H + P^-1) * H^T * R^-1
 
                 K_x.setZero(); // = cov::Zero();
-                K_x.template block<n, 12>(0, 0) = K_ * h_x_;
+                K_x.template block<n, 12>(0, 0) = K_ * h_x_; // K * H
                 K_h.setZero();
-                K_h.template block<n, 1>(0, 0) = K_ * dyn_share.h;
+                K_h.template block<n, 1>(0, 0) = K_ * dyn_share.h; // K * z
 #endif
             }
 
             //K_x = K_ * h_x_;
             // (iKFoM Eq. 38) 只不过把顺序做了一下变换 这里没有显式的乘Jk 是因为前边单独处理过dx_new 到这里已经带了Jk
-            Matrix<scalar_type, n, 1> dx_ = K_h + (K_x - Matrix<scalar_type, n, n>::Identity()) * dx_new;
+            // Jk^-1 = -Jk??
+            Matrix<scalar_type, n, 1> dx_ = K_h + (K_x - Matrix<scalar_type, n, n>::Identity()) * dx_new; // K * z + ( K * H - I) * Jk * dx
             state x_before = x_;
-            x_.boxplus(dx_);
+            x_.boxplus(dx_); // x + dx
             dyn_share.converge = true;
             for(int i = 0; i < n ; i++)
             {
@@ -2226,7 +2229,7 @@ public:
                     // else
                     // {
                     for(int i = 0; i < 12; i++){
-                        K_x. template block<3, 1>(idx, i) = res_temp_SO3 * (K_x. template block<3, 1>(idx, i));
+                        K_x. template block<3, 1>(idx, i) = res_temp_SO3 * (K_x. template block<3, 1>(idx, i)); // J * K * H
                     }
                     //}
                     for(int i = 0; i < n; i++){
@@ -2292,7 +2295,7 @@ public:
                 // }
                 // else
                 //{
-                P_ = L_ - K_x.template block<n, 12>(0, 0) * P_.template block<12, n>(0, 0);
+                P_ = L_ - K_x.template block<n, 12>(0, 0) * P_.template block<12, n>(0, 0); // J*P*J^T - J * K * H * P * J^T, ?
                 //}
                 solve_time += omp_get_wtime() - solve_start;
                 return;
