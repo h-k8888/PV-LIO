@@ -38,7 +38,7 @@ noise_model:
 
 
 publish:
-    pub_voxel_map: true
+    pub_voxel_map: false
     publish_max_voxel_layer: 1         # only publish 0,1,2 layer's plane
     path_en:  true
     scan_publish_en:  true       # false: close all the point cloud output
@@ -53,8 +53,8 @@ pcd_save:
 
 # prism or RTK in IMU frame
 ground_truth:
-    #    extrinsic_T: [ 0.16, 0.0, 0.84 ]   ## GNSS in IMU frame
-    extrinsic_T: [ 0.27255, -0.00053, 0.17954]    ## LiDAR in IMU frame
+    extrinsic_T: [ 0.16, 0.0, 0.84 ]   ## GNSS in IMU frame
+#    extrinsic_T: [ 0.27255, -0.00053, 0.17954]    ## LiDAR in IMU frame
     extrinsic_R: [ 1, 0, 0,
                    0, 1, 0,
                    0, 0, 1 ]

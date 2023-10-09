@@ -992,6 +992,7 @@ int main(int argc, char** argv)
     bool init_map = false;
 
     double sum_optimize_time = 0, sum_update_time = 0;
+    double mean_scan_time = 0;
     int scan_index = 0;
 
     signal(SIGINT, SigHandle);
@@ -1011,6 +1012,7 @@ int main(int argc, char** argv)
                 continue;
             }
 
+            double t0 = omp_get_wtime();
             p_imu->Process(Measures, kf, feats_undistort);
             state_point = kf.get_x();
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
@@ -1146,8 +1148,12 @@ int main(int argc, char** argv)
             t_update_end = omp_get_wtime();
             sum_update_time += t_update_end - t_update_start;
 
+            double t1 = omp_get_wtime();
+            mean_scan_time += t1 - t0;
             scan_index++;
             std::printf("Mean  Topt: %.5fs   Tu: %.5fs\n", sum_optimize_time / scan_index, sum_update_time / scan_index);
+            std::printf("Mean scan time: %.3fms.\n", mean_scan_time / scan_index * 1000);
+
             // ===============================================================================================================
             // 可视化相关的shit
             /******* Publish odometry *******/
