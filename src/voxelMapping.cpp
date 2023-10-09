@@ -149,6 +149,15 @@ esekfom::esekf<state_ikfom, 12, input_ikfom> kf;
 state_ikfom state_point;
 vect3 pos_lid;
 
+//for ground truth
+geometry_msgs::PoseStamped msg_target_pose;
+nav_msgs::Path path_target;
+// for ground truth, target in IMU frame
+vector<double>       gt_extrinT(3, 0.0);
+vector<double>       gt_extrinR(9, 0.0);
+V3D gt_T_wrt_IMU(Zero3d);
+M3D gt_R_wrt_IMU(Eye3d);
+
 nav_msgs::Path path;
 nav_msgs::Odometry odomAftMapped;
 geometry_msgs::Quaternion geoQuat;
@@ -549,6 +558,72 @@ void publish_path(const ros::Publisher pubPath)
         path.poses.push_back(msg_body_pose);
         pubPath.publish(path);
     }
+
+//    if (!have_keyframe)
+    {
+//        V3D euler_body = SO3ToEuler(state_point.rot);
+//        body_keypose_last << euler_body(0), euler_body(1), euler_body(2), state_point.pos(0), state_point.pos(1), state_point.pos(2);
+//        state_body_last = state_point;
+        vect3 pos_target;
+        pos_target = state_point.pos + state_point.rot * gt_T_wrt_IMU;
+        msg_target_pose.header.stamp = ros::Time().fromSec(lidar_end_time);
+        msg_target_pose.header.frame_id = "camera_init";
+        msg_target_pose.pose.position.x = pos_target(0);
+        msg_target_pose.pose.position.y = pos_target(1);
+        msg_target_pose.pose.position.z = pos_target(2);
+        Eigen::Quaterniond quat_target(state_point.rot * gt_R_wrt_IMU);
+        msg_target_pose.pose.orientation.x = quat_target.x();
+        msg_target_pose.pose.orientation.y = quat_target.y();
+        msg_target_pose.pose.orientation.z = quat_target.z();
+        msg_target_pose.pose.orientation.w = quat_target.w();
+        path_target.poses.push_back(msg_target_pose);
+//        have_keyframe = true;
+//        return;
+    }
+//
+//    Eigen::Quaterniond q_last(state_body_last.rot.coeffs()[3], state_body_last.rot.coeffs()[0], state_body_last.rot.coeffs()[1], state_body_last.rot.coeffs()[2]);
+//    Eigen::Quaterniond q_curr(state_point.rot.coeffs()[3], state_point.rot.coeffs()[0], state_point.rot.coeffs()[1], state_point.rot.coeffs()[2]);
+//    Eigen::Matrix3d r_incre(q_last * q_curr.inverse());
+//    Eigen::Vector3d rpy = r_incre.eulerAngles(2, 1, 0);
+//
+////    V3D euler_body = SO3ToEuler(state_point.rot);
+//    //计算当前帧与最新关键帧之间的相对变换
+////    Eigen::Affine3f transStart = pclPointToAffine3f(cloudKeyPoses6D->back());
+////    Eigen::Affine3f transFinal = pcl::getTransformation(transformTobeMapped[3], transformTobeMapped[4], transformTobeMapped[5],
+////                                                        transformTobeMapped[0], transformTobeMapped[1], transformTobeMapped[2]);
+////    Eigen::Affine3f transBetween = transStart.inverse() * transFinal;//相对变换 lastkeyframe <-- current
+//    float x, y, z, roll, pitch, yaw;
+////    pcl::getTranslationAndEulerAngles(transBetween, x, y, z, roll, pitch, yaw);
+////
+//    x = state_body_last.pos(0) - state_point.pos(0);
+//    y = state_body_last.pos(1) - state_point.pos(1);
+//    z = state_body_last.pos(2) - state_point.pos(2);
+//    roll = rpy(2);
+//    pitch = rpy(1);
+//    yaw = rpy(0);
+//    float surroundingkeyframeAddingAngleThreshold = 0.2;
+//    float surroundingkeyframeAddingDistThreshold = 1.0;
+//    if (abs(roll)  >= surroundingkeyframeAddingAngleThreshold ||
+//        abs(pitch) >= surroundingkeyframeAddingAngleThreshold ||
+//        abs(yaw)   >= surroundingkeyframeAddingAngleThreshold ||
+//        sqrt(x*x + y*y + z*z) >= surroundingkeyframeAddingDistThreshold)
+////    if (jjj % 20 == 0)
+//    {
+//        vect3 pos_target;
+//        pos_target = state_point.pos + state_point.rot * gt_T_wrt_IMU;
+//        msg_target_pose.header.stamp = ros::Time().fromSec(lidar_end_time);
+//        msg_target_pose.header.frame_id = "camera_init";
+//        msg_target_pose.pose.position.x = pos_target(0);
+//        msg_target_pose.pose.position.y = pos_target(1);
+//        msg_target_pose.pose.position.z = pos_target(2);
+//        Eigen::Quaterniond quat_target(state_point.rot * gt_R_wrt_IMU);
+//        msg_target_pose.pose.orientation.x = quat_target.x();
+//        msg_target_pose.pose.orientation.y = quat_target.y();
+//        msg_target_pose.pose.orientation.z = quat_target.z();
+//        msg_target_pose.pose.orientation.w = quat_target.w();
+//        path_target.poses.push_back(msg_target_pose);
+//        state_body_last = state_point;
+//    }
 }
 
 void transformLidar(const state_ikfom &state_point, const PointCloudXYZI::Ptr &input_cloud, PointCloudXYZI::Ptr &trans_cloud)
@@ -879,6 +954,14 @@ int main(int argc, char** argv)
     p_imu->set_gyr_bias_cov(V3D(b_gyr_cov, b_gyr_cov, b_gyr_cov));
     p_imu->set_acc_bias_cov(V3D(b_acc_cov, b_acc_cov, b_acc_cov));
 
+    // for ground truth target
+    nh.param<vector<double>>("ground_truth/extrinsic_T", gt_extrinT, vector<double>());
+    nh.param<vector<double>>("ground_truth/extrinsic_R", gt_extrinR, vector<double>());
+    gt_T_wrt_IMU<<VEC_FROM_ARRAY(gt_extrinT);
+    gt_R_wrt_IMU<<MAT_FROM_ARRAY(gt_extrinR);
+    FILE *fp_target;
+    string pos_target_dir = root_dir + "/Log/target_path.txt";
+
     double epsi[23] = {0.001};
     fill(epsi, epsi+23, 0.001);
     kf.init_dyn_share(get_f, df_dx, df_dw, observation_model_share, NUM_MAX_ITERATIONS, epsi);
@@ -1087,6 +1170,30 @@ int main(int argc, char** argv)
 
         status = ros::ok();
         rate.sleep();
+    }
+
+    //save globalPath
+//    if (runtime_pos_log)
+    {
+        printf("\n..............Saving path................\n");
+        printf("path file: %s\n", pos_target_dir.c_str());
+        ofstream of(pos_target_dir);
+        if (of.is_open())
+        {
+            of.setf(ios::fixed, ios::floatfield);
+            of.precision(6);
+            for (int i = 0; i < (int)path_target.poses.size(); ++i) {
+                of<< path_target.poses[i].header.stamp.toSec()<< " "
+                  <<path_target.poses[i].pose.position.x<< " "
+                  <<path_target.poses[i].pose.position.y<< " "
+                  <<path_target.poses[i].pose.position.z<< " "
+                  <<path_target.poses[i].pose.orientation.x<< " "
+                  <<path_target.poses[i].pose.orientation.y<< " "
+                  <<path_target.poses[i].pose.orientation.z<< " "
+                  <<path_target.poses[i].pose.orientation.w<< "\n";
+            }
+            of.close();
+        }
     }
 
     return 0;

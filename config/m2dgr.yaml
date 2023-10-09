@@ -13,8 +13,8 @@ preprocess:
 mapping:
     down_sample_size: 0.4
     max_iteration: 3
-    voxel_size: 1.0
-    max_layer: 4                # 4 layer, 0, 1, 2, 3
+    voxel_size: 1.6
+    max_layer: 3                # 4 layer, 0, 1, 2, 3
     layer_point_size: [ 5, 5, 5, 5, 5 ]
     plannar_threshold: 0.01
     max_points_size: 1000      # #todo
@@ -49,3 +49,12 @@ pcd_save:
     pcd_save_en: false
     interval: -1                 # how many LiDAR frames saved in each pcd file;
     # -1 : all frames will be saved in ONE pcd file, may lead to memory crash when having too much frames.
+
+
+# prism or RTK in IMU frame
+ground_truth:
+    #    extrinsic_T: [ 0.16, 0.0, 0.84 ]   ## GNSS in IMU frame
+    extrinsic_T: [ 0.27255, -0.00053, 0.17954]    ## LiDAR in IMU frame
+    extrinsic_R: [ 1, 0, 0,
+                   0, 1, 0,
+                   0, 0, 1 ]
