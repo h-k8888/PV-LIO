@@ -22,7 +22,7 @@ mapping:
 
     fov_degree:    360
     det_range:     100.0
-    extrinsic_est_en:  true      # true: enable the online estimation of IMU-LiDAR extrinsic,
+    extrinsic_est_en:  false      # true: enable the online estimation of IMU-LiDAR extrinsic,
     extrinsic_T: [ 0.27255, -0.00053, 0.17954 ]
     extrinsic_R: [ 1, 0, 0,
                    0, 1, 0,
@@ -53,8 +53,8 @@ pcd_save:
 
 # prism or RTK in IMU frame
 ground_truth:
-    extrinsic_T: [ 0.16, 0.0, 0.84 ]   ## GNSS in IMU frame
-#    extrinsic_T: [ 0.27255, -0.00053, 0.17954]    ## LiDAR in IMU frame
+#    extrinsic_T: [ 0.16, 0.0, 0.84 ]   ## GNSS in IMU frame
+    extrinsic_T: [ 0.27255, -0.00053, 0.17954]    ## LiDAR in IMU frame
     extrinsic_R: [ 1, 0, 0,
                    0, 1, 0,
                    0, 0, 1 ]

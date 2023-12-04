@@ -800,12 +800,12 @@ void observation_model_share(state_ikfom &s, esekfom::dyn_share_datastruct<doubl
     {
 
 //        const PointType &laser_p  = laserCloudOri->points[i];
-        V3D point_this_be(ptpl_list[i].point);
+        V3D point_this_be(ptpl_list[i].point);//lidar frame
         M3D point_be_crossmat;
         point_be_crossmat << SKEW_SYM_MATRX(point_this_be);
-        V3D point_this = s.offset_R_L_I * point_this_be + s.offset_T_L_I;
+        V3D point_this = s.offset_R_L_I * point_this_be + s.offset_T_L_I; //body frame
         M3D point_crossmat;
-        point_crossmat<<SKEW_SYM_MATRX(point_this);
+        point_crossmat<<SKEW_SYM_MATRX(point_this); //body frame: p^
 
         /*** get the normal vector of closest surface/corner ***/
 //        const PointType &norm_p = corr_normvect->points[i];
