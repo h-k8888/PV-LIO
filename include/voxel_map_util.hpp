@@ -1298,45 +1298,45 @@ void pubPlaneMap(const std::unordered_map<VOXEL_LOC, OctoTree *> &feat_map,
 
 M3D calcBodyCov(Eigen::Vector3d &pb, const float range_inc, const float degree_inc)
 {
-    // theta = azimuth, phi = vertical angle
-    float dist_xy = sqrt(pb[0] * pb[0] + pb[1] * pb[1]);
-    float r = sqrt(pb[0] * pb[0] + pb[1] * pb[1] + pb[2] * pb[2]);
-    float sin_phi = pb[2] / r;
-    float cos_phi = dist_xy / r;
-    float sin_theta = pb[1] / dist_xy;
-    float cos_theta = pb[0] / dist_xy;
-
-    Eigen::Matrix3d A;
-    A(0, 0) = cos_theta * cos_phi;  A(0, 1) = -r * sin_theta * cos_phi;  A(0, 2) = -r * cos_theta * sin_phi;
-    A(1, 0) = sin_theta * cos_phi;  A(1, 1) = r * cos_theta * cos_phi;   A(1, 2) = -r * sin_theta * sin_phi;
-    A(2, 0) = sin_phi;              A(2, 1) = 0;                         A(2, 2) = r * cos_phi;
-    Eigen::Matrix3d cov = Eigen::Matrix3d::Identity();
-    cov(0, 0) = range_inc; cov(1, 1) = degree_inc; cov(2, 2) = degree_inc;
-    return A * cov * A.transpose();
+//    // theta = azimuth, phi = vertical angle
+//    float dist_xy = sqrt(pb[0] * pb[0] + pb[1] * pb[1]);
+//    float r = sqrt(pb[0] * pb[0] + pb[1] * pb[1] + pb[2] * pb[2]);
+//    float sin_phi = pb[2] / r;
+//    float cos_phi = dist_xy / r;
+//    float sin_theta = pb[1] / dist_xy;
+//    float cos_theta = pb[0] / dist_xy;
+//
+//    Eigen::Matrix3d A;
+//    A(0, 0) = cos_theta * cos_phi;  A(0, 1) = -r * sin_theta * cos_phi;  A(0, 2) = -r * cos_theta * sin_phi;
+//    A(1, 0) = sin_theta * cos_phi;  A(1, 1) = r * cos_theta * cos_phi;   A(1, 2) = -r * sin_theta * sin_phi;
+//    A(2, 0) = sin_phi;              A(2, 1) = 0;                         A(2, 2) = r * cos_phi;
+//    Eigen::Matrix3d cov = Eigen::Matrix3d::Identity();
+//    cov(0, 0) = range_inc; cov(1, 1) = degree_inc; cov(2, 2) = degree_inc;
+//    return A * cov * A.transpose();
     
     
-//  float range = sqrt(pb[0] * pb[0] + pb[1] * pb[1] + pb[2] * pb[2]);
-//  float range_var = range_inc * range_inc;
-//  Eigen::Matrix2d direction_var;
-//    // (angle_cov^2, 0,
-//    //  0, angle_cov^2)
-//  direction_var << pow(sin(DEG2RAD(degree_inc)), 2), 0, 0, pow(sin(DEG2RAD(degree_inc)), 2);
-//  Eigen::Vector3d direction(pb);
-//  direction.normalize();
-//  Eigen::Matrix3d direction_hat; // w^
-//  direction_hat << 0, -direction(2), direction(1), direction(2), 0, -direction(0), -direction(1), direction(0), 0;
-//  //direction dot base_vector1 = 0
-//  Eigen::Vector3d base_vector1(1, 1, -(direction(0) + direction(1)) / direction(2)); //(1, 1, -(x+y)/z), not unique
-//  base_vector1.normalize();
-//  Eigen::Vector3d base_vector2 = base_vector1.cross(direction);
-//  base_vector2.normalize();
-//  Eigen::Matrix<double, 3, 2> N; //N = [base_vector1, base_vector2]
-//  N << base_vector1(0), base_vector2(0), base_vector1(1), base_vector2(1),
-//      base_vector1(2), base_vector2(2);
-//  Eigen::Matrix<double, 3, 2> A = range * direction_hat * N; // (d * w^ * N )in the paper
-//  //cov = w * var_d * w^T + A * var_w * A^T
-//  return direction * range_var * direction.transpose() +
-//        A * direction_var * A.transpose();
+  float range = sqrt(pb[0] * pb[0] + pb[1] * pb[1] + pb[2] * pb[2]);
+  float range_var = range_inc * range_inc;
+  Eigen::Matrix2d direction_var;
+    // (angle_cov^2, 0,
+    //  0, angle_cov^2)
+  direction_var << pow(sin(DEG2RAD(degree_inc)), 2), 0, 0, pow(sin(DEG2RAD(degree_inc)), 2);
+  Eigen::Vector3d direction(pb);
+  direction.normalize();
+  Eigen::Matrix3d direction_hat; // w^
+  direction_hat << 0, -direction(2), direction(1), direction(2), 0, -direction(0), -direction(1), direction(0), 0;
+  //direction dot base_vector1 = 0
+  Eigen::Vector3d base_vector1(1, 1, -(direction(0) + direction(1)) / direction(2)); //(1, 1, -(x+y)/z), not unique
+  base_vector1.normalize();
+  Eigen::Vector3d base_vector2 = base_vector1.cross(direction);
+  base_vector2.normalize();
+  Eigen::Matrix<double, 3, 2> N; //N = [base_vector1, base_vector2]
+  N << base_vector1(0), base_vector2(0), base_vector1(1), base_vector2(1),
+      base_vector1(2), base_vector2(2);
+  Eigen::Matrix<double, 3, 2> A = range * direction_hat * N; // (d * w^ * N )in the paper
+  //cov = w * var_d * w^T + A * var_w * A^T
+  return direction * range_var * direction.transpose() +
+        A * direction_var * A.transpose();
 
 
 };
