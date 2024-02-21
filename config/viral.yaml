@@ -19,8 +19,8 @@ mapping:
     max_layer: 3                # 4 layer, 0, 1, 2, 3
     layer_point_size: [ 5, 5, 5, 5, 5 ]
     plannar_threshold: 0.01
-    max_points_size: 1000      # #todo
-    max_cov_points_size: 1000  # #todo
+    max_points_size: 2000      # #todo
+    max_cov_points_size: 2000  # #todo
 
     fov_degree:    360
     det_range:     100.0
@@ -38,6 +38,9 @@ noise_model:
     b_acc_cov: 8.0e-5
     b_gyr_cov: 3.0e-6
 
+
+cov_incremental:
+    num_update_thread: 1
 
 publish:
     pub_voxel_map: false

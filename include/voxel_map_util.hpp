@@ -19,7 +19,7 @@
 #define MAX_N 10000000000
 
 static int plane_id = 0;
-
+extern int num_update_thread;
 // a point to plane matching structure
 typedef struct ptpl {
   Eigen::Vector3d point;
@@ -657,7 +657,7 @@ void updateVoxelMapOMP(const std::vector<pointWithCov> &input_points,
     t_update_start = omp_get_wtime();
     // 并行延迟更新
 #ifdef MP_EN
-    omp_set_num_threads(MP_PROC_NUM);
+    omp_set_num_threads(num_update_thread);
 #pragma omp parallel for default(none) shared(position_index_map, feat_map)
 #endif
     for (size_t b = 0; b < position_index_map.bucket_count(); b++) {

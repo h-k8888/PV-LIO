@@ -166,6 +166,7 @@ geometry_msgs::PoseStamped msg_body_pose;
 shared_ptr<Preprocess> p_pre(new Preprocess());
 shared_ptr<ImuProcess> p_imu(new ImuProcess());
 
+int num_update_thread;
 void SigHandle(int sig)
 {
     flg_exit = true;
@@ -914,6 +915,8 @@ int main(int argc, char** argv)
     nh.param<double>("noise_model/acc_cov",acc_cov,0.1);
     nh.param<double>("noise_model/b_gyr_cov",b_gyr_cov,0.0001);
     nh.param<double>("noise_model/b_acc_cov",b_acc_cov,0.0001);
+
+    nh.param<int>("cov_incremental/num_update_thread", num_update_thread, 4);
 
     // visualization params
     nh.param<bool>("publish/pub_voxel_map", publish_voxel_map, false);
