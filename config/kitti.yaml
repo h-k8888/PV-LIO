@@ -1,0 +1,111 @@
+common:
+    lid_topic:  "/points_raw"
+    imu_topic:  "/imu_raw"
+    time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
+    lidar_time_offset: 0.0      # begin time = lidar timestamp + time offset
+
+preprocess:
+    lidar_type: 2                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
+    scan_line: 64
+    scan_rate: 10                # only need to be set for velodyne, unit: Hz,
+    timestamp_unit: 2            # the unit of time/t field in the PointCloud2 rostopic: 0-second, 1-milisecond, 2-microsecond, 3-nanosecond.
+    Horizon_SCAN: 1800           # lidar horizontal resolution (Velodyne:1800, Ouster:512,1024,2048)
+    blind: 2
+    point_filter_num: 4
+
+mapping:
+    down_sample_size: 0.4
+    max_iteration: 3
+    voxel_size: 1.6
+    max_layer: 3                # 4 layer, 0, 1, 2, 3
+    layer_point_size: [ 5, 5, 5, 5, 5 ]
+    plannar_threshold: 0.01
+    max_points_size: 1000      # #todo
+    max_cov_points_size: 1000  # #todo
+
+    fov_degree:    360
+    det_range:     100.0
+    extrinsic_est_en:  false      # true: enable the online estimation of IMU-LiDAR extrinsic,
+    extrinsic_T: [ 0.810544 -0.307054  0.802724 ]     # Lidar in IMU frame 2011_09_30
+    extrinsic_R: [0.999998, -0.000785403, 0.00202441,
+                  0.000755307, 0.99989, 0.0148245,
+                -0.00203583, -0.014823, 0.999888]
+#    extrinsic_T: [ 0.27255, -0.00053, 0.17954 ]     # Lidar in IMU frame 2011_09_26
+#    extrinsic_R: [ 1, 0, 0,
+#                   0, 1, 0,
+#                   0, 0, 1 ]
+#    extrinsic_T: [ 0.27255, -0.00053, 0.17954 ]     # Lidar in IMU frame 2011_10_03
+#    extrinsic_R: [ 1, 0, 0,
+#                   0, 1, 0,
+#                   0, 0, 1 ]
+
+noise_model:
+    ranging_cov: 0.04
+    angle_cov: 0.1
+    acc_cov: 3.7686306102624571e-02
+    gyr_cov: 2.3417543020438883e-03
+    b_acc_cov: 1.1416642385952368e-03
+    b_gyr_cov: 1.4428407712885209e-05
+
+
+publish:
+    pub_voxel_map: true
+    publish_max_voxel_layer: 1         # only publish 0,1,2 layer's plane
+    path_en:  true
+    scan_publish_en:  true       # false: close all the point cloud output
+    dense_publish_en: true       # false: low down the points number in a global-frame point clouds scan.
+    scan_bodyframe_pub_en: true  # true: output the point cloud scans in IMU-body-frame
+
+pcd_save:
+    pcd_save_en: false
+    interval: -1                 # how many LiDAR frames saved in each pcd file;
+    # -1 : all frames will be saved in ONE pcd file, may lead to memory crash when having too much frames.
+
+log:
+    enable: true
+
+normal:
+    project_name: log_lio
+    compute_table: false
+    ring_table_dir: "/config/kitti"
+    compute_normal: true
+    check_normal: true
+    compute_normal_cov: false
+#    roughness_max: 0.05
+    refine_en: 0  #refine normal with point cov, 0: disable ; 1: refind n; 2: refine n & d; 3: refine n & 3D center(fail)
+    refine_maximum_iter: 5
+
+cov_scale:
+#    local_tan_scale: 0.002      # tangential
+#    local_rad_scale: 0.001      # radial
+#    roughness_cov_max: 0.02     # 0.01
+    roughness_cov_scale: 0.01  # 0.002
+    incident_cov_max: 0.01
+    incident_cov_scale: 0.8     # 1.0
+    visual_ray_scale: 0.05       # along ray direction
+    visual_tan_scale: 1.0       # non-ray direction
+    visual_a_scale: 0.5       # transparent
+#    trace_scale: 0.00
+#    trace_outlier_t: 0.4
+
+cov_incremental:
+    lambda_cov_threshold: 0.0001
+    normal_cov_threshold: 0.00001    # normal cov incremental term 2 magnitude
+    normal_cov_incre_min: 40000
+    normal_cov_update_interval: 100
+    num_update_thread: 4
+
+# ground truth in IMU frame
+ground_truth:
+    extrinsic_T: [1.1439, -0.312718,  0.726546]    ## CAM in IMU frame  2011_09_30
+    extrinsic_R: [ 0.00781297, -0.0042792, 0.99996,
+                -0.999859, -0.014868, 0.00774856,
+                0.0148343, -0.99988, -0.00439476]
+#    extrinsic_T: [ 0.27255, -0.00053, 0.17954 ]    ## CAM in IMU frame  2011_09_26
+#    extrinsic_R: [ 1, 0, 0,
+#                   0, 1, 0,
+#                   0, 0, 1 ]
+#    extrinsic_T: [ 0.27255, -0.00053, 0.17954 ]    ## CAM in IMU frame  2011_10_03
+#    extrinsic_R: [ 1, 0, 0,
+#                   0, 1, 0,
+#                   0, 0, 1 ]
