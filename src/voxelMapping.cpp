@@ -157,6 +157,11 @@ vector<double>       gt_extrinT(3, 0.0);
 vector<double>       gt_extrinR(9, 0.0);
 V3D gt_T_wrt_IMU(Zero3d);
 M3D gt_R_wrt_IMU(Eye3d);
+MD(4, 4) gt_wrt_IMU;
+
+// record kitti times
+deque<double> timestamps_lidar;
+
 
 nav_msgs::Path path;
 nav_msgs::Odometry odomAftMapped;
@@ -237,6 +242,7 @@ void RGBpointBodyLidarToIMU(PointType const * const pi, PointType * const po)
     po->normal_x = pi->normal_x;
 }
 
+double mean_preprocess = 0.0;
 void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
 {
     auto time_offset = lidar_time_offset;
@@ -254,8 +260,10 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
     p_pre->process(msg, ptr);
     lidar_buffer.push_back(ptr);
     time_buffer.push_back(msg->header.stamp.toSec() + time_offset);
+    timestamps_lidar.push_back(msg->header.stamp.toSec() + time_offset);
     last_timestamp_lidar = msg->header.stamp.toSec() + time_offset;
     s_plot11[scan_count] = omp_get_wtime() - preprocess_start_time;
+    mean_preprocess = mean_preprocess * (scan_count - 1) / scan_count + s_plot11[scan_count] / scan_count;
     mtx_buffer.unlock();
     sig_buffer.notify_all();
 }
@@ -420,6 +428,80 @@ bool sync_packages(MeasureGroup &meas)
     return true;
 }
 
+bool sync_kitti_packages(MeasureGroup &meas)
+{
+    lidar_mean_scantime = 0.104;
+    if (lidar_buffer.empty() || imu_buffer.empty()) {
+        return false;
+    }
+
+    /*** push a lidar scan ***/
+    if(!lidar_pushed)
+    {
+        meas.lidar = lidar_buffer.front();
+        meas.lidar_beg_time = time_buffer.front();
+
+        // todo: cdn not compute lidar_end_time for kitti
+        lidar_end_time = meas.lidar_beg_time;
+//        if (meas.lidar->points.size() <= 1) // time too little
+//        {
+//            lidar_end_time = meas.lidar_beg_time + lidar_mean_scantime;
+//            ROS_WARN("Too few input point cloud!\n");
+//        }
+//        else if (meas.lidar->points.back().curvature / double(1000) < 0.5 * lidar_mean_scantime)
+//        {
+//            lidar_end_time = meas.lidar_beg_time + lidar_mean_scantime;
+//        }
+//        else
+//        {
+//
+////            std::printf("\nFirst 100 points: \n");
+////            for(int i=0; i < 100; ++i){
+////                std::printf("%f ", meas.lidar->points[i].curvature  / double(1000));
+////            }
+////
+////            std::printf("\n Last 100 points: \n");
+////            for(int i=100; i >0; --i){
+////                std::printf("%f ", meas.lidar->points[meas.lidar->size() - i - 1].curvature / double(1000));
+////            }
+////            std::printf("last point offset time: %f\n", meas.lidar->points.back().curvature / double(1000));
+//            scan_num ++;
+//            lidar_end_time = meas.lidar_beg_time + meas.lidar->points.back().curvature / double(1000);
+////            lidar_end_time = meas.lidar_beg_time + (meas.lidar->points[meas.lidar->points.size() - 20]).curvature / double(1000);
+//            lidar_mean_scantime += (meas.lidar->points.back().curvature / double(1000) - lidar_mean_scantime) / scan_num;
+////            std::printf("pcl_bag_time: %f\n", meas.lidar_beg_time);
+////            std::printf("lidar_end_time: %f\n", lidar_end_time);
+//        }
+
+        meas.lidar_end_time = lidar_end_time;
+//        std::printf("Scan start timestamp: %f, Scan end time: %f\n", meas.lidar_beg_time, meas.lidar_end_time);
+
+        lidar_pushed = true;
+    }
+
+    if (last_timestamp_imu < lidar_end_time)
+    {
+        return false;
+    }
+
+    /*** push imu data, and pop from imu buffer ***/
+    double imu_time = imu_buffer.front()->header.stamp.toSec();
+    meas.imu.clear();
+    while ((!imu_buffer.empty()) && (imu_time < lidar_end_time))
+    {
+        imu_time = imu_buffer.front()->header.stamp.toSec();
+        if(imu_time > lidar_end_time) break;
+        meas.imu.push_back(imu_buffer.front());
+        imu_buffer.pop_front();
+    }
+
+    lidar_buffer.pop_front();
+    time_buffer.pop_front();
+    lidar_pushed = false;
+    return true;
+}
+
+
 PointCloudXYZI::Ptr pcl_wait_pub(new PointCloudXYZI(500000, 1));
 PointCloudXYZI::Ptr pcl_wait_save(new PointCloudXYZI());
 
@@ -560,6 +642,16 @@ void publish_path(const ros::Publisher pubPath)
         pubPath.publish(path);
     }
 
+//    // pose with respect to ground truth pose 0
+//    MD(4, 4) T;
+//    T.block<3, 3>(0, 0) = state_point.rot.matrix();
+//    T.block<3, 1>(0, 3) = state_point.pos;
+//    T(3, 0) = 0;
+//    T(3, 1) = 0;
+//    T(3, 2) = 0;
+//    T(3, 3) = 1;
+//    T = gt_wrt_IMU.inverse() * T * gt_wrt_IMU;
+
 //    if (!have_keyframe)
     {
 //        V3D euler_body = SO3ToEuler(state_point.rot);
@@ -567,12 +659,17 @@ void publish_path(const ros::Publisher pubPath)
 //        state_body_last = state_point;
         vect3 pos_target;
         pos_target = state_point.pos + state_point.rot * gt_T_wrt_IMU;
+        Eigen::Quaterniond quat_target(state_point.rot * gt_R_wrt_IMU);
+//        Eigen::Quaterniond quat_target(T.block<3, 3>(0, 0));
+
         msg_target_pose.header.stamp = ros::Time().fromSec(lidar_end_time);
         msg_target_pose.header.frame_id = "camera_init";
         msg_target_pose.pose.position.x = pos_target(0);
         msg_target_pose.pose.position.y = pos_target(1);
         msg_target_pose.pose.position.z = pos_target(2);
-        Eigen::Quaterniond quat_target(state_point.rot * gt_R_wrt_IMU);
+//        msg_target_pose.pose.position.x = T(0, 3);
+//        msg_target_pose.pose.position.y = T(1, 3);
+//        msg_target_pose.pose.position.z = T(2, 3);
         msg_target_pose.pose.orientation.x = quat_target.x();
         msg_target_pose.pose.orientation.y = quat_target.y();
         msg_target_pose.pose.orientation.z = quat_target.z();
@@ -924,6 +1021,7 @@ int main(int argc, char** argv)
 
     nh.param<double>("preprocess/blind", p_pre->blind, 0.01);
     nh.param<int>("preprocess/lidar_type", p_pre->lidar_type, AVIA);
+    nh.param<int>("preprocess/lidar_type", p_imu->lidar_type, AVIA);
     nh.param<int>("preprocess/scan_line", p_pre->N_SCANS, 16);
     nh.param<int>("preprocess/scan_rate", p_pre->SCAN_RATE, 10);
     nh.param<int>("preprocess/point_filter_num", p_pre->point_filter_num, 1);
@@ -957,11 +1055,38 @@ int main(int argc, char** argv)
     p_imu->set_gyr_bias_cov(V3D(b_gyr_cov, b_gyr_cov, b_gyr_cov));
     p_imu->set_acc_bias_cov(V3D(b_acc_cov, b_acc_cov, b_acc_cov));
 
+//    Eigen::Affine3d Lidar_wrt_IMU;
+//    Lidar_wrt_IMU.rotate(Lidar_R_wrt_IMU);
+////    Lidar_wrt_IMU.translation() = Lidar_T_wrt_IMU;
+//    Lidar_wrt_IMU.translation() = Lidar_T_wrt_IMU;
+//    cout << "Lidar_wrt_IMU R:\n" << Lidar_wrt_IMU.rotation().matrix() << endl;
+//    cout << "Lidar_wrt_IMU T:\n" << Lidar_wrt_IMU.translation() << endl;
+//    Eigen::Affine3d Lidar_wrt_IMU_inv = Lidar_wrt_IMU.inverse();
+//    cout << "Lidar_wrt_IMU -1 R:\n" << Lidar_wrt_IMU_inv.rotation().matrix() << endl;
+//    cout << "Lidar_wrt_IMU -1 T:\n" << Lidar_wrt_IMU_inv.translation().transpose() << endl;
+//    M3D R_inv = Lidar_R_wrt_IMU.transpose();
+//    V3D T_inv = -R_inv * Lidar_T_wrt_IMU;
+//    cout << "R_inv:\n" << R_inv << endl;
+//    cout << "T_inv:\n" << T_inv.transpose() << endl;
+
     // for ground truth target
     nh.param<vector<double>>("ground_truth/extrinsic_T", gt_extrinT, vector<double>());
     nh.param<vector<double>>("ground_truth/extrinsic_R", gt_extrinR, vector<double>());
     gt_T_wrt_IMU<<VEC_FROM_ARRAY(gt_extrinT);
     gt_R_wrt_IMU<<MAT_FROM_ARRAY(gt_extrinR);
+    gt_wrt_IMU.block<3, 3>(0, 0) = gt_R_wrt_IMU;
+    gt_wrt_IMU.block<3, 1>(0, 3) = gt_T_wrt_IMU;
+    gt_wrt_IMU(3, 0) = 0; gt_wrt_IMU(3, 1) = 0; gt_wrt_IMU(3, 2) = 0; gt_wrt_IMU(3, 3) = 1;
+    cout << "gt_wrt_IMU:\n" << gt_wrt_IMU << endl;
+//    M3D R_cam_imu = gt_R_wrt_IMU * Lidar_R_wrt_IMU;
+//    V3D T_cam_imu = gt_R_wrt_IMU * Lidar_T_wrt_IMU + gt_T_wrt_IMU;
+//    cout << "R_cam_imu:\n" << R_cam_imu << endl;
+//    cout << "T_cam_imu:\n" << T_cam_imu.transpose() << endl;
+//    M3D R_imu_cam = R_cam_imu.transpose();
+//    V3D T_imu_cam = - R_imu_cam * T_cam_imu;
+//    cout << "R_imu_cam:\n" << R_imu_cam << endl;
+//    cout << "T_imu_cam:\n" << T_imu_cam.transpose() << endl;
+
     FILE *fp_target;
     string pos_target_dir = root_dir + "/Log/target_path.txt";
 
@@ -990,6 +1115,11 @@ int main(int argc, char** argv)
             ("/path", 100000);
     ros::Publisher voxel_map_pub =
             nh.advertise<visualization_msgs::MarkerArray>("/planes", 10000);
+    ros::Publisher map_ringfals_pub = nh.advertise<visualization_msgs::Marker>("/map_ring_fals", 10);
+    ros::Publisher rough_cov_pub = nh.advertise<visualization_msgs::MarkerArray>("/rough_cov", 10);
+    ros::Publisher map_voxel_normal_pub = nh.advertise<visualization_msgs::Marker>("/map_voxel_normal", 10);
+    ros::Publisher scan_cov_pub = nh.advertise<visualization_msgs::MarkerArray>("/scan_cov", 10);
+    ros::Publisher scan_cov_ir_pub = nh.advertise<visualization_msgs::MarkerArray>("/scan_cov_ir", 10);
 //------------------------------------------------------------------------------------------------------
     // for Plane Map
     bool init_map = false;
@@ -1005,7 +1135,12 @@ int main(int argc, char** argv)
     {
         if (flg_exit) break;
         ros::spinOnce();
-        if(sync_packages(Measures))
+        bool valid_points_imu = false;
+        if (p_pre->lidar_type == 4)
+            valid_points_imu = sync_kitti_packages(Measures);
+        else
+            valid_points_imu = (sync_packages(Measures));
+        if(valid_points_imu)
         {
             if (flg_first_scan)
             {
@@ -1202,6 +1337,18 @@ int main(int argc, char** argv)
                   <<path_target.poses[i].pose.orientation.w<< "\n";
             }
             of.close();
+        }
+
+        string times_file = root_dir + "/Log/" + "times.txt";
+        ofstream of_times(times_file);
+        if (of_times.is_open())
+        {
+            of_times.setf(ios::fixed, ios::floatfield);
+            of_times.precision(20);
+            for (int i = 0; i < (int)timestamps_lidar.size(); ++i) {
+                of_times<< timestamps_lidar[i] << "\n";
+            }
+            of_times.close();
         }
     }
 

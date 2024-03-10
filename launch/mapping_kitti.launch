@@ -1,5 +1,5 @@
 <launch>
-    <!-- Launch file for velodyne16 VLP-16 LiDAR -->
+    <!-- Launch file for velodyne64 VLP-64 LiDAR -->
 
     <arg name="rviz" default="true"/>
     <arg name="debug" default="false"/>
