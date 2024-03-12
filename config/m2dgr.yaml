@@ -27,6 +27,7 @@ mapping:
     extrinsic_R: [ 1, 0, 0,
                    0, 1, 0,
                    0, 0, 1 ]
+    extrinsic_q_en: false
 
 noise_model:
     ranging_cov: 0.04
@@ -37,7 +38,7 @@ noise_model:
     b_gyr_cov: 1.4428407712885209e-05
 
 cov_incremental:
-    num_update_thread: 1
+    num_update_thread: 4
 
 publish:
     pub_voxel_map: false

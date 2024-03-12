@@ -151,7 +151,7 @@ vect3 pos_lid;
 
 //for ground truth
 geometry_msgs::PoseStamped msg_target_pose;
-nav_msgs::Path path_target;
+nav_msgs::Path path_target_begin, path_target_end;
 // for ground truth, target in IMU frame
 vector<double>       gt_extrinT(3, 0.0);
 vector<double>       gt_extrinR(9, 0.0);
@@ -260,8 +260,8 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
     p_pre->process(msg, ptr);
     lidar_buffer.push_back(ptr);
     time_buffer.push_back(msg->header.stamp.toSec() + time_offset);
-    timestamps_lidar.push_back(msg->header.stamp.toSec() + time_offset);
     last_timestamp_lidar = msg->header.stamp.toSec() + time_offset;
+    timestamps_lidar.push_back(last_timestamp_lidar);
     s_plot11[scan_count] = omp_get_wtime() - preprocess_start_time;
     mean_preprocess = mean_preprocess * (scan_count - 1) / scan_count + s_plot11[scan_count] / scan_count;
     mtx_buffer.unlock();
@@ -656,7 +656,7 @@ void publish_path(const ros::Publisher pubPath)
     {
 //        V3D euler_body = SO3ToEuler(state_point.rot);
 //        body_keypose_last << euler_body(0), euler_body(1), euler_body(2), state_point.pos(0), state_point.pos(1), state_point.pos(2);
-//        state_body_last = state_point;
+
         vect3 pos_target;
         pos_target = state_point.pos + state_point.rot * gt_T_wrt_IMU;
         Eigen::Quaterniond quat_target(state_point.rot * gt_R_wrt_IMU);
@@ -674,7 +674,7 @@ void publish_path(const ros::Publisher pubPath)
         msg_target_pose.pose.orientation.y = quat_target.y();
         msg_target_pose.pose.orientation.z = quat_target.z();
         msg_target_pose.pose.orientation.w = quat_target.w();
-        path_target.poses.push_back(msg_target_pose);
+        path_target_end.poses.push_back(msg_target_pose);
 //        have_keyframe = true;
 //        return;
     }
@@ -719,7 +719,7 @@ void publish_path(const ros::Publisher pubPath)
 //        msg_target_pose.pose.orientation.y = quat_target.y();
 //        msg_target_pose.pose.orientation.z = quat_target.z();
 //        msg_target_pose.pose.orientation.w = quat_target.w();
-//        path_target.poses.push_back(msg_target_pose);
+//        path_target_end.poses.push_back(msg_target_pose);
 //        state_body_last = state_point;
 //    }
 }
@@ -1003,6 +1003,10 @@ int main(int argc, char** argv)
     nh.param<double>("mapping/plannar_threshold", min_eigen_value, 0.01);
     nh.param<bool>("mapping/extrinsic_est_en", extrinsic_est_en, true);
     nh.param<vector<double>>("mapping/extrinsic_T", extrinT, vector<double>());
+    bool extrinsic_q_en = false;
+    nh.param<bool>("mapping/extrinsic_q_en", extrinsic_q_en, false);
+    vector<double> extrinsic_q;
+    nh.param<vector<double>>("mapping/extrinsic_q", extrinsic_q, vector<double>());
     nh.param<vector<double>>("mapping/extrinsic_R", extrinR, vector<double>());
 
     // noise model params
@@ -1048,7 +1052,18 @@ int main(int argc, char** argv)
 
     // XXX 暂时现在lidar callback中固定转换到IMU系下
     Lidar_T_wrt_IMU<<VEC_FROM_ARRAY(extrinT);
-    Lidar_R_wrt_IMU<<MAT_FROM_ARRAY(extrinR);
+    if (extrinsic_q_en)
+    {
+        Eigen::Quaterniond Lidar_q_wrt_IMU;
+        Lidar_q_wrt_IMU.x() = extrinsic_q[0];
+        Lidar_q_wrt_IMU.y() = extrinsic_q[1];
+        Lidar_q_wrt_IMU.z() = extrinsic_q[2];
+        Lidar_q_wrt_IMU.w() = extrinsic_q[3];
+        Lidar_R_wrt_IMU = Lidar_q_wrt_IMU.matrix();
+        cout << "Lidar_R_wrt_IMU:\n" << Lidar_R_wrt_IMU << endl;
+    }
+    else
+        Lidar_R_wrt_IMU<<MAT_FROM_ARRAY(extrinR);
     p_imu->set_extrinsic(Lidar_T_wrt_IMU, Lidar_R_wrt_IMU);
     p_imu->set_gyr_cov(V3D(gyr_cov, gyr_cov, gyr_cov));
     p_imu->set_acc_cov(V3D(acc_cov, acc_cov, acc_cov));
@@ -1088,7 +1103,8 @@ int main(int argc, char** argv)
 //    cout << "T_imu_cam:\n" << T_imu_cam.transpose() << endl;
 
     FILE *fp_target;
-    string pos_target_dir = root_dir + "/Log/target_path.txt";
+    string pos_target_begin_time = root_dir + "/Log/target_begin_path.txt";
+    string pos_target_end_time = root_dir + "/Log/target_end_path.txt";
 
     double epsi[23] = {0.001};
     fill(epsi, epsi+23, 0.001);
@@ -1319,24 +1335,82 @@ int main(int argc, char** argv)
     //save globalPath
 //    if (runtime_pos_log)
     {
-        printf("\n..............Saving path................\n");
-        printf("path file: %s\n", pos_target_dir.c_str());
-        ofstream of(pos_target_dir);
+        printf("\n..............Saving path lidar end time................\n");
+        printf("path file: %s\n", pos_target_end_time.c_str());
+        ofstream of(pos_target_end_time);
         if (of.is_open())
         {
             of.setf(ios::fixed, ios::floatfield);
             of.precision(6);
-            for (int i = 0; i < (int)path_target.poses.size(); ++i) {
-                of<< path_target.poses[i].header.stamp.toSec()<< " "
-                  <<path_target.poses[i].pose.position.x<< " "
-                  <<path_target.poses[i].pose.position.y<< " "
-                  <<path_target.poses[i].pose.position.z<< " "
-                  <<path_target.poses[i].pose.orientation.x<< " "
-                  <<path_target.poses[i].pose.orientation.y<< " "
-                  <<path_target.poses[i].pose.orientation.z<< " "
-                  <<path_target.poses[i].pose.orientation.w<< "\n";
+            for (int i = 0; i < (int)path_target_end.poses.size(); ++i) {
+                of<< path_target_end.poses[i].header.stamp.toSec()<< " "
+                  <<path_target_end.poses[i].pose.position.x<< " "
+                  <<path_target_end.poses[i].pose.position.y<< " "
+                  <<path_target_end.poses[i].pose.position.z<< " "
+                  <<path_target_end.poses[i].pose.orientation.x<< " "
+                  <<path_target_end.poses[i].pose.orientation.y<< " "
+                  <<path_target_end.poses[i].pose.orientation.z<< " "
+                  <<path_target_end.poses[i].pose.orientation.w<< "\n";
             }
             of.close();
+        }
+
+        //interpolate pose at lidar begin time
+        {
+            int begin_time_ptr = 0;
+            int begin_time_size = timestamps_lidar.size();
+            double begin_time = timestamps_lidar[0];
+//        int end_time_ptr_left = 0;
+            double end_time_left = path_target_end.poses[0].header.stamp.toSec();
+            while (begin_time_ptr < begin_time_size) {
+                begin_time = timestamps_lidar[begin_time_ptr];
+                if (begin_time > end_time_left)
+                    break;
+                ++begin_time_ptr;
+            }
+
+            printf("\n..............Saving path lidar begin time................\n");
+            printf("path file: %s\n", pos_target_begin_time.c_str());
+            ofstream of_beg(pos_target_begin_time);
+            of_beg.setf(ios::fixed, ios::floatfield);
+            of_beg.precision(6);
+            for (int i = 1; i < path_target_end.poses.size(); ++i) {
+                double end_time_right = path_target_end.poses[i].header.stamp.toSec();
+
+                while (begin_time_ptr < begin_time_size && timestamps_lidar[begin_time_ptr] <= end_time_right) {
+                    begin_time = timestamps_lidar[begin_time_ptr];
+                    //interpolate between end time left and right
+                    double dt_l = begin_time - end_time_left;
+                    double dt_r = end_time_right - begin_time;
+                    double dt_l_r = end_time_right - end_time_left;
+                    double ratio_l = dt_l / dt_l_r;
+                    double ratio_r = dt_r / dt_l_r;
+
+                    const auto &pose_l = path_target_end.poses[i - 1].pose;
+                    const auto &pose_r = path_target_end.poses[i].pose;
+
+                    V3D pos_l(pose_l.position.x, pose_l.position.y, pose_l.position.z);
+                    V3D pos_r(pose_r.position.x, pose_r.position.y, pose_r.position.z);
+
+                    Eigen::Quaterniond q_l(pose_l.orientation.w, pose_l.orientation.x, pose_l.orientation.y,
+                                           pose_l.orientation.z);
+                    Eigen::Quaterniond q_r(pose_r.orientation.w, pose_r.orientation.x, pose_r.orientation.y,
+                                           pose_r.orientation.z);
+
+                    Eigen::Quaterniond  q_begin_time = q_l.slerp(ratio_l, q_r);
+                    V3D pos_begin_time = pos_l * ratio_l + pos_r * ratio_r;
+
+                    of_beg<< begin_time << " "
+                      <<pos_begin_time(0)<< " " <<pos_begin_time(1)<< " " <<pos_begin_time(2)<< " "
+                      <<q_begin_time.x()<< " "
+                      <<q_begin_time.y()<< " "
+                      <<q_begin_time.z()<< " "
+                      <<q_begin_time.w()<< "\n";
+
+                    ++begin_time_ptr;
+                }
+                end_time_left = end_time_right;
+            }
         }
 
         string times_file = root_dir + "/Log/" + "times.txt";
