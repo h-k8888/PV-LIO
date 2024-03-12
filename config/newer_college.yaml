@@ -42,7 +42,7 @@ noise_model:
 
 
 cov_incremental:
-    num_update_thread: 1
+    num_update_thread: 4
 
 publish:
     pub_voxel_map: false

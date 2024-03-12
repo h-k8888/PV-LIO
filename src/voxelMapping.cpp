@@ -159,9 +159,8 @@ V3D gt_T_wrt_IMU(Zero3d);
 M3D gt_R_wrt_IMU(Eye3d);
 MD(4, 4) gt_wrt_IMU;
 
-// record kitti times
+// record begin time for pose interpolation
 deque<double> timestamps_lidar;
-
 
 nav_msgs::Path path;
 nav_msgs::Odometry odomAftMapped;
@@ -1411,6 +1410,7 @@ int main(int argc, char** argv)
                 }
                 end_time_left = end_time_right;
             }
+            of_beg.close();
         }
 
         string times_file = root_dir + "/Log/" + "times.txt";
