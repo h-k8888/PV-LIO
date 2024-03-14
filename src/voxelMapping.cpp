@@ -1102,8 +1102,7 @@ int main(int argc, char** argv)
 //    cout << "T_imu_cam:\n" << T_imu_cam.transpose() << endl;
 
     FILE *fp_target;
-    string pos_target_begin_time = root_dir + "/Log/target_begin_path.txt";
-    string pos_target_end_time = root_dir + "/Log/target_end_path.txt";
+    string pose_target_file = root_dir + "/Log/target_path.txt";
 
     double epsi[23] = {0.001};
     fill(epsi, epsi+23, 0.001);
@@ -1324,7 +1323,6 @@ int main(int argc, char** argv)
             }
             // publish_effect_world(pubLaserCloudEffect);
             // publish_map(pubLaserCloudMap);
-
         }
 
         status = ros::ok();
@@ -1334,26 +1332,6 @@ int main(int argc, char** argv)
     //save globalPath
 //    if (runtime_pos_log)
     {
-        printf("\n..............Saving path lidar end time................\n");
-        printf("path file: %s\n", pos_target_end_time.c_str());
-        ofstream of(pos_target_end_time);
-        if (of.is_open())
-        {
-            of.setf(ios::fixed, ios::floatfield);
-            of.precision(6);
-            for (int i = 0; i < (int)path_target_end.poses.size(); ++i) {
-                of<< path_target_end.poses[i].header.stamp.toSec()<< " "
-                  <<path_target_end.poses[i].pose.position.x<< " "
-                  <<path_target_end.poses[i].pose.position.y<< " "
-                  <<path_target_end.poses[i].pose.position.z<< " "
-                  <<path_target_end.poses[i].pose.orientation.x<< " "
-                  <<path_target_end.poses[i].pose.orientation.y<< " "
-                  <<path_target_end.poses[i].pose.orientation.z<< " "
-                  <<path_target_end.poses[i].pose.orientation.w<< "\n";
-            }
-            of.close();
-        }
-
         //interpolate pose at lidar begin time
         {
             int begin_time_ptr = 0;
@@ -1368,11 +1346,20 @@ int main(int argc, char** argv)
                 ++begin_time_ptr;
             }
 
-            printf("\n..............Saving path lidar begin time................\n");
-            printf("path file: %s\n", pos_target_begin_time.c_str());
-            ofstream of_beg(pos_target_begin_time);
+            printf("\n..............Saving path................\n");
+            printf("path file: %s\n", pose_target_file.c_str());
+            ofstream of_beg(pose_target_file);
             of_beg.setf(ios::fixed, ios::floatfield);
-            of_beg.precision(6);
+            of_beg.precision(10);
+            of_beg<< path_target_end.poses[0].header.stamp.toSec()<< " "
+              <<path_target_end.poses[0].pose.position.x<< " "
+              <<path_target_end.poses[0].pose.position.y<< " "
+              <<path_target_end.poses[0].pose.position.z<< " "
+              <<path_target_end.poses[0].pose.orientation.x<< " "
+              <<path_target_end.poses[0].pose.orientation.y<< " "
+              <<path_target_end.poses[0].pose.orientation.z<< " "
+              <<path_target_end.poses[0].pose.orientation.w<< "\n";
+
             for (int i = 1; i < path_target_end.poses.size(); ++i) {
                 double end_time_right = path_target_end.poses[i].header.stamp.toSec();
 
@@ -1408,6 +1395,14 @@ int main(int argc, char** argv)
 
                     ++begin_time_ptr;
                 }
+                of_beg<< path_target_end.poses[i].header.stamp.toSec()<< " "
+                  <<path_target_end.poses[i].pose.position.x<< " "
+                  <<path_target_end.poses[i].pose.position.y<< " "
+                  <<path_target_end.poses[i].pose.position.z<< " "
+                  <<path_target_end.poses[i].pose.orientation.x<< " "
+                  <<path_target_end.poses[i].pose.orientation.y<< " "
+                  <<path_target_end.poses[i].pose.orientation.z<< " "
+                  <<path_target_end.poses[i].pose.orientation.w<< "\n";
                 end_time_left = end_time_right;
             }
             of_beg.close();
