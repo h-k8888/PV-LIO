@@ -1384,7 +1384,7 @@ int main(int argc, char** argv)
                                            pose_r.orientation.z);
 
                     Eigen::Quaterniond  q_begin_time = q_l.slerp(ratio_l, q_r);
-                    V3D pos_begin_time = pos_l * ratio_l + pos_r * ratio_r;
+                    V3D pos_begin_time = pos_l * ratio_r + pos_r * ratio_l;
 
                     of_beg<< begin_time << " "
                       <<pos_begin_time(0)<< " " <<pos_begin_time(1)<< " " <<pos_begin_time(2)<< " "
