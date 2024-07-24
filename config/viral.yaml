@@ -2,6 +2,7 @@ common:
     lid_topic:  "/os1_cloud_node1/points"
     imu_topic:  "/imu/imu"
     time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
+    lidar_time_offset: -0.10      # begin time = lidar timestamp + time offset
 
 preprocess:
     lidar_type: 3                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR,
@@ -19,8 +20,8 @@ mapping:
     max_layer: 3                # 4 layer, 0, 1, 2, 3
     layer_point_size: [ 5, 5, 5, 5, 5 ]
     plannar_threshold: 0.01
-    max_points_size: 2000      # #todo
-    max_cov_points_size: 2000  # #todo
+    max_points_size: 1000      # #todo
+    max_cov_points_size: 1000  # #todo
 
     fov_degree:    360
     det_range:     100.0
@@ -41,7 +42,7 @@ noise_model:
 
 
 cov_incremental:
-    num_update_thread: 1
+    num_update_thread: 4
 
 publish:
     pub_voxel_map: false
